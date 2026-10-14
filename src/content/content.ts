@@ -16,6 +16,7 @@ class BossAutoApplyManager {
   private abortController: AbortController | null = null;
   private rootContainer: HTMLElement | null = null;
   private shadowRoot: ShadowRoot | null = null;
+  private todayCount: number = 0;
   /** 已处理过的岗位唯一标识集合（防止单轮或多轮循环中重复比对与计数） */
   private processedKeys: Set<string> = new Set();
 
@@ -54,10 +55,12 @@ class BossAutoApplyManager {
         await chrome.storage.local.set({ todayCount: 0, lastDate: todayStr });
       }
 
+      this.todayCount = todayCount;
       this.state = {
         ...DEFAULT_STATE,
         targetCount: this.config.maxApplyPerRun,
-        appliedCount: todayCount,
+        appliedCount: 0, // 本次批次投递初始从 0 开始
+        filteredCount: 0,
       };
 
       this.updateFloatingUI();
@@ -314,10 +317,18 @@ class BossAutoApplyManager {
 
   public async start() {
     if (this.isRunning) return;
+
+    // 若当前处于完成状态或本次投递已达上限，重置计数开启新一轮
+    if (this.state.status === 'COMPLETED' || this.state.appliedCount >= this.state.targetCount) {
+      this.state.appliedCount = 0;
+      this.state.filteredCount = 0;
+      this.state.targetCount = this.config.maxApplyPerRun;
+      this.processedKeys.clear();
+    }
+
     this.isRunning = true;
     this.isPaused = false;
     this.abortController = new AbortController();
-    this.processedKeys.clear(); // 新一轮启动时重置处理记录
 
     this.state.status = 'RUNNING';
     this.state.message = '🚀 批量投递运行中...';
@@ -583,8 +594,9 @@ class BossAutoApplyManager {
   private async incrementTodayCount() {
     const { todayCount = 0 } = (await chrome.storage.local.get('todayCount')) as { todayCount?: number };
     const todayStr = new Date().toISOString().slice(0, 10);
+    this.todayCount = todayCount + 1;
     await chrome.storage.local.set({
-      todayCount: todayCount + 1,
+      todayCount: this.todayCount,
       lastDate: todayStr,
     });
   }
@@ -741,11 +753,15 @@ class BossAutoApplyManager {
         <div class="stat-row">
           <div class="stat-item">
             <span class="stat-num" id="stat-applied">0</span>
-            <span class="stat-label">已投递</span>
+            <span class="stat-label">本次投递</span>
           </div>
           <div class="stat-item">
             <span class="stat-num" id="stat-target">25</span>
-            <span class="stat-label">目标限额</span>
+            <span class="stat-label">单次限额</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-num" id="stat-today">0</span>
+            <span class="stat-label">今日总计</span>
           </div>
           <div class="stat-item">
             <span class="stat-num" id="stat-filtered">0</span>
@@ -804,6 +820,7 @@ class BossAutoApplyManager {
     const statusText = this.shadowRoot.getElementById('pill-status-text');
     const statApplied = this.shadowRoot.getElementById('stat-applied');
     const statTarget = this.shadowRoot.getElementById('stat-target');
+    const statToday = this.shadowRoot.getElementById('stat-today');
     const statFiltered = this.shadowRoot.getElementById('stat-filtered');
     const pillMsg = this.shadowRoot.getElementById('pill-msg');
     const btnMain = this.shadowRoot.getElementById('btn-main-action');
@@ -811,6 +828,7 @@ class BossAutoApplyManager {
 
     if (statApplied) statApplied.textContent = String(this.state.appliedCount);
     if (statTarget) statTarget.textContent = String(this.state.targetCount);
+    if (statToday) statToday.textContent = String(this.todayCount);
     if (statFiltered) statFiltered.textContent = String(this.state.filteredCount);
 
     if (pillMsg) {

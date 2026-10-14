@@ -177,7 +177,7 @@ export const ControlTab: React.FC<ControlTabProps> = ({
             }}
           >
             <span>🚀</span>
-            <span>一键开始批量投递</span>
+            <span>{state.status === 'COMPLETED' ? '开启新一轮批量投递' : '一键开始批量投递'}</span>
           </button>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

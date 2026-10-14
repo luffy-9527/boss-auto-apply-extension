@@ -77,7 +77,13 @@ export const App: React.FC = () => {
   }, []);
 
   const handleStart = useCallback(async () => {
-    setState((prev) => ({ ...prev, status: 'RUNNING', message: '正在启动投递...' }));
+    setState((prev) => ({
+      ...prev,
+      status: 'RUNNING',
+      appliedCount: prev.status === 'COMPLETED' || prev.appliedCount >= prev.targetCount ? 0 : prev.appliedCount,
+      filteredCount: prev.status === 'COMPLETED' || prev.appliedCount >= prev.targetCount ? 0 : prev.filteredCount,
+      message: '正在启动投递...'
+    }));
     await sendExtensionMessage({ action: 'START' });
   }, []);
 
